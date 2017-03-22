@@ -22,6 +22,26 @@ There are a number of goals:
 # Detailed design
 [design]: #detailed-design
 
+## High-Level Overview
+  - the compiler as a set of memoized, pure functions = "queries"
+  - lazy evaluation
+  - dependency tracking
+  - small example
+
+## The Memoization Algorithm in Detail
+  - what happens when a query is made
+  - red/green algorithm
+  - pseudocode
+  - anonymous nodes (why and how)
+    - pseudocode
+    - discussion of alternatives
+  - handling diagnostics/"side effects"
+
+## Cached Values and Persistence
+  - caching policies
+  - caching for anonymous nodes
+  - "garbage collection"
+
 # How We Teach This
 [how-we-teach-this]: #how-we-teach-this
 
