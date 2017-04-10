@@ -157,7 +157,8 @@ N/A -- various tradeoffs are discussed in the detailed design.
 # Alternatives
 [alternatives]: #alternatives
 
-N/A -- various alternatives are discussed in the detailed design.
+Mention Adapton model and why we don't use it verbatim.
+
 
 # Unresolved questions
 [unresolved]: #unresolved-questions
