@@ -128,11 +128,107 @@ This is our dependency graph. Without the red/green algorithm, since `HIR(foo)` 
 
 With the red/green algorithm things are different. Let's say we start by make a query for `MIR(caller_1)`. That node is still grey, we don't know yet if it is up-to-date, so we walk its inputs to see if all of them are green. When we encounter `Ty(foo)` we have to recompute it since `HIR(foo)` has changed, but in contrast to before we can switch it to green and consequently do not have to recompute `MIR(caller_1)` and later can also re-use the other MIR instances.
 
+### Red/Green Evaluation Pseudo-Rust
 
-<!--  - what happens when a query is made -->
-<!-- - red/green algorithm -->
+```rust
 
-  - pseudocode
+fn query_foo(ctx, id) -> Result {
+
+    // If the value is already cached, just return it
+    if ctx.query_cache_foo.contains_key(id) {
+        return ctx.query_cache_foo[id]
+    }
+
+    // It is possible that we have verified that the on-disk value is still
+    // valid but have not loaded it into memory yet.
+    if ctx.dep_graph.node_color(id) == green {
+        let result = ctx.on_disk_cache_foo.load(id);
+        ctx.query_cache_foo.insert(id, result);
+        result
+    }
+
+    // We don't have a value cached, check if the on-disk cache is still valid.
+    // We do this by trying to mark the corresponding dependency node as green,
+    // which will only succeed if all its immediate dependencies are green and
+    // might involve actually evaluating and caching transitive dependencies.
+    if try_mark_green(ctx, id) {
+        let result = ctx.on_disk_cache_foo.load(id);
+        ctx.query_cache_foo.insert(id, result);
+        result
+    } else {
+        // One of the dependencies turned up red, we have to re-compute.
+        force(ctx, id)
+    }
+}
+
+fn try_mark_green(ctx, id) {
+    // We are trying to mark this node as green, so it must still be grey
+    assert!(ctx.dep_graph.node_color(id) == grey);
+
+    for dep in ctx.dep_graph.dependencies(id) {
+        match ctx.dep_graph.node_color(dep) {
+            green => {
+                // This node checks out, take a look at the next
+            }
+            red => {
+                // This node has changed compared to the last compilation
+                // session, so we did not succeed in marking this node green
+                return false
+            }
+            grey => {
+                // We don't know the state of this dependency
+                if !try_mark_green(ctx, dep) {
+                    // We could not mark it as green without re-computing it,
+                    // so we "force" it.
+                    // NOTE: This involves some kind of dynamic dispatch, since
+                    // the dependency/query could be of any type.
+                    force(ctx, id);
+
+                    // Check the color again
+                    if ctx.dep_graph.node_color(dep) == red {
+                        return false
+                    }
+                }
+            }
+        }
+    }
+
+    ctx.dep_graph.mark_green(id)
+
+    true
+}
+
+fn force<T>(ctx, id) -> Result {
+    ctx.dep_graph.clear_edges(id);
+    ctx.dep_graph.push_as_current_task(id);
+    let result = T::compute(ctx, id);
+    ctx.dep_graph.pop_current_task();
+
+    // Cache the result for future queries.
+    ctx.query_cache.insert(id, result);
+
+    // Now we know the new value. Let's see if it has actually changed.
+    let prev_fingerprint = ctx.dep_graph.fingerprint(id);
+    let fingerprint = result.fingerprint(ctx);
+
+    if fingerprint == prev_fingerprint {
+        // No actual change, which means:
+        // - We can leave the on-disk cache untouched.
+        // - We can mark this node as green.
+        ctx.dep_graph.mark_green(id);
+    } else {
+        // The value has changed, mark as red an store the new value in
+        // on-disk cache
+        ctx.dep_graph.mark_red(id, fingerprint);
+
+        // This will hopefully happen in a background thread:
+        ctx.on_disk_cache.store(id, result);
+    }
+
+    result
+}
+```
+
   - anonymous nodes (why and how)
     - pseudocode
     - discussion of alternatives
