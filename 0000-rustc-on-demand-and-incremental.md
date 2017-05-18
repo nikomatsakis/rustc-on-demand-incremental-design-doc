@@ -182,7 +182,7 @@ fn try_mark_green(ctx, id) {
                     // so we "force" it.
                     // NOTE: This involves some kind of dynamic dispatch, since
                     // the dependency/query could be of any type.
-                    force(ctx, id);
+                    force(ctx, dep);
 
                     // Check the color again
                     if ctx.dep_graph.node_color(dep) == red {
